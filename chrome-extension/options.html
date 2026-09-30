@@ -115,9 +115,10 @@
     <section>
       <h2>Connect to OCWeb</h2>
       <p class="muted">
-        Run <code>cargo run -- --print-pairing</code> in the <code>ocweb-mcp</code> project directory.
-        Paste the output below and click Connect. You can run this command while the service is running.
-        Pair once; future connections are automatic while the Rust service runs.
+        Start the downloaded <code>ocweb-mcp</code> executable, then open
+        <a href="http://127.0.0.1:18799/docs" target="_blank" rel="noopener">OCWeb setup documentation</a>.
+        Copy the complete connection string shown on that page, paste it below and click Connect.
+        Pair once; future connections are automatic while the service runs.
       </p>
       <textarea
         id="pairingString"
@@ -130,9 +131,10 @@
     <section>
       <h2>Diagnostics</h2>
       <p class="muted">
-        Start the Rust service with <code>cargo run</code>.
+        Run the downloaded executable: <code>./ocweb-mcp</code> on macOS/Linux,
+        or <code>.\ocweb-mcp.exe</code> in Windows PowerShell.
         Default API documentation: <a href="http://127.0.0.1:18799/docs" target="_blank" rel="noopener">http://127.0.0.1:18799/docs</a>.
-        If you use a different port, include it in the pairing command: <code>--port 18800</code>.
+        If you use a different port, open the documentation URL printed by the service.
       </p>
       <button id="disconnect" class="danger" type="button">
         Disconnect

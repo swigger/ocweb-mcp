@@ -1,42 +1,50 @@
 # OCWeb MCP
 
-独立 Rust 浏览器自动化服务。连接相邻目录的 OpenClaw Chrome 扩展，通过同一个本地端口提供 **HTTP JSON API、Streamable HTTP MCP、内置 API 文档**。运行不需要 OpenClaw、Gateway、Node.js 或 Playwright。
+独立 Rust 浏览器自动化服务。连接随发布版提供的 Chrome 扩展，通过同一个本地端口提供 **HTTP JSON API、Streamable HTTP MCP、内置 API 文档**。运行不需要 OpenClaw、Gateway、Node.js 或 Playwright。
 
 ## 启动
 
+下载适合当前系统的可执行文件和 Chrome 扩展包，无需源码或 Rust 环境。在可执行文件所在目录启动服务并保持运行：
+
 ```sh
-cargo run -- --show-credentials
+# macOS / Linux
+./ocweb-mcp
 ```
+
+```powershell
+# Windows PowerShell
+.\ocweb-mcp.exe
+```
+
+打开终端显示的文档地址（默认 <http://127.0.0.1:18799/docs>），即可查看实时连接状态并复制完整连接串。
 
 默认监听 `127.0.0.1:18799`。先监听再等待扩展；5 秒未连接时打印操作指引，进程继续运行。扩展连接成功后打印 MCP 接入方式；断线后继续等待重连。
 
 ```sh
-cargo run -- --port 18800 --connect-timeout 10 --extension-dir ../chrome-extension
-cargo build --release
-./target/release/ocweb-mcp
+./ocweb-mcp --port 18800 --connect-timeout 10
 ```
 
 `--port 0` 自动选择空闲端口，主要用于测试。重新选择端口后需要重新配对。`--state-dir <directory>` 更改凭据目录，默认为 `~/.ocweb-mcp`。使用 `--help` 查看参数。
 
-凭据在首次启动时生成，保存在 `credentials.json`，Unix 上权限为 0600。`relay_key` 只用于扩展配对，`api_token` 用于脚本及 MCP。正常日志和公开文档不会输出密钥；`--show-credentials` 会在本地终端显式显示这两个秘密，请勿分享其输出。重启保留凭据，不需要每次重新配对。
+凭据在首次启动时生成，保存在 `credentials.json`，Unix 上权限为 0600。`relay_key` 只用于扩展配对，`api_token` 用于脚本及 MCP。正常日志不会输出密钥；本机 `/docs` 通过 `/setup` 动态获取完整配对连接串，请勿分享连接串。该接口不返回 API token，响应禁止缓存。`--show-credentials` 会在本地终端显式显示这两个秘密，请勿分享其输出。重启保留凭据，不需要每次重新配对。
 
-服务已在运行时，可在另一个终端获取配对串，不会启动第二个服务：
+也可在服务已运行时，另开终端使用可执行文件获取配对串，不会启动第二个服务（Windows PowerShell 将 `./ocweb-mcp` 换成 `.\ocweb-mcp.exe`）：
 
 ```sh
-cargo run -- --print-pairing
+./ocweb-mcp --print-pairing
 # macOS：直接复制到剪贴板
-cargo run -- --print-pairing | pbcopy
+./ocweb-mcp --print-pairing | pbcopy
 ```
 
 如果使用自定义端口或凭据目录，上述命令也要传相同的 `--port` / `--state-dir`。更新已加载的扩展后，在 `chrome://extensions` 点击其重新加载按钮。
 
 ## 首次连接 Chrome
 
-1. 打开 `chrome://extensions`，开启开发者模式。
-2. 点击“加载已解压的扩展程序”，选择本项目旁的 `chrome-extension` 目录。
-3. 打开扩展的 Settings，在 **Connect to OCWeb** 中粘贴终端显示的配对字符串：`ws://127.0.0.1:18799/extension#<relay_key>`。
+1. 解压下载的 Chrome 扩展包，打开 `chrome://extensions`，开启开发者模式。
+2. 点击“加载已解压的扩展程序”，选择解压后包含 `manifest.json` 的目录。
+3. 打开服务终端显示的 `/docs` 页面，点击“复制连接串”。打开扩展的 Settings，在 **Connect to OCWeb** 中粘贴该完整连接串并点击 **Connect**。
 4. 选择 **Selected tabs** 并把页面加入 **OpenClaw** 标签组，或选择 **All tabs**。页面必须是扩展可访问的普通标签页。
-5. 终端显示“浏览器已连接”。空标签列表也可以代表连接成功；请检查授权范围。
+5. 文档页面自动显示“浏览器已连接”，终端也会提示。空标签列表也可以代表连接成功；请检查授权范围。
 
 Chrome 扩展主动连接 Rust WebSocket 服务。服务不扫描个人浏览器配置、不启用远程调试端口、不自动安装或重启浏览器。保留扩展的配对认证及标签页授权规则。
 
@@ -120,12 +128,15 @@ curl http://127.0.0.1:18799/api/browser \
 
 真正撤销权限返回 `ACCESS_REVOKED`；断线、普通 JavaScript 异常和其他错误不自动重试。REST 保留 `error` 文本并附加 `code`，MCP 的错误 text 内容为同样的 JSON 对象（`isError: true`）。升级时需要重启 Rust 服务并在 `chrome://extensions` 重新加载扩展，旧扩展没有结构化错误码，服务不会根据旧错误文本猜测是否重试。无法分类的旧式访问错误返回一般 `BROWSER_ERROR` 和重新加载扩展的指引，不再声称权限已被撤销。
 
-## 验证
+## 源码开发与验证
+
+以下仅供源码开发者使用，发布版用户无需安装 Rust 或执行 Cargo 命令。
 
 ```sh
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo build
+# 构建发布版：cargo build --release
 CHROME_BIN='/path/to/Chrome for Testing' node scripts/smoke.mjs
 # 只验证导航错误分类、REST/MCP 安全重试、重试上限及真实撤权：
 CHROME_BIN='/path/to/Chrome for Testing' node scripts/smoke.mjs --navigation-only

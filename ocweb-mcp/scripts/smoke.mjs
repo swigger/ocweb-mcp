@@ -79,6 +79,7 @@ try {
     const port=await until(()=>{assert(rust.exitCode===null,logs);return logs.match(/正在监听 http:\/\/127\.0\.0\.1:(\d+)/)?.[1]},'Rust server did not start');
     const base=`http://127.0.0.1:${port}`;
     const credentials=JSON.parse(await readFile(join(temp,'state','credentials.json'),'utf8'));
+    const expectedPairing=`ws://127.0.0.1:${port}/extension#${credentials.relay_key}`;
     const headers={'Authorization':`Bearer ${credentials.api_token}`,'Content-Type':'application/json'};
     const api=async action=>{if(process.env.TRACE)console.log('API',action.action);const r=await fetch(base+'/api/browser',{method:'POST',headers,body:JSON.stringify(action)});const value=await r.json();assert.equal(r.status,200,JSON.stringify(value));return value};
     assert.equal((await fetch(base+'/api/tabs')).status,401);
@@ -88,6 +89,15 @@ try {
     const openapi=await (await fetch(base+'/openapi.json')).json();
     assert.equal(openapi.openapi,'3.1.0');
     assert((await (await fetch(base+'/docs')).text()).includes('POST /api/browser'));
+    const setupResponse=await fetch(base+'/setup');
+    assert.equal(setupResponse.headers.get('cache-control'),'no-store');
+    assert.deepEqual(await setupResponse.json(),{pairing:expectedPairing,browser_connected:false});
+    assert.equal((await fetch(base+'/setup',{headers:{Origin:'https://attacker.invalid'}})).status,403);
+    const invalidHostStatus=await new Promise((resolve,reject)=>{
+        http.get(base+'/setup',{headers:{Host:'attacker.invalid'}},response=>{response.resume();resolve(response.statusCode)}).on('error',reject);
+    });
+    assert.equal(invalidHostStatus,403);
+    assert(!(await (await fetch(base+'/health')).text()).includes(credentials.relay_key));
     assert(logs.includes('尚未连接浏览器'), 'startup must show setup steps');
     console.log('PASS disconnected startup, docs, auth and Origin boundary');
 
@@ -100,6 +110,16 @@ try {
     assert.equal((await (await fetch(base+'/health')).json()).browser_connected,false);
 
     await launchChrome();
+    const {targetId:docsTarget}=await cdp.call('Target.createTarget',{url:base+'/docs'});
+    const docsSession=(await cdp.call('Target.attachToTarget',{targetId:docsTarget,flatten:true})).sessionId;
+    const pairing=await until(async()=>{try{return await cdp.evaluate("document.querySelector('#pairing')?.value",docsSession)}catch(e){if(e.message.includes('Cannot find default execution context'))return false;throw e}},'Docs did not load the connection string');
+    assert.equal(pairing,expectedPairing,'docs must provide a complete, usable connection string for the actual port');
+    assert(await cdp.evaluate("document.querySelector('#status').textContent.includes('尚未连接浏览器') && !document.querySelector('#copy-pairing').disabled && !document.body.innerText.includes('cargo run')",docsSession));
+    await cdp.call('Network.enable',{},docsSession);
+    await cdp.call('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:-1,uploadThroughput:-1},docsSession);
+    await until(()=>cdp.evaluate("document.querySelector('#status').textContent.includes('无法连接服务') && !document.querySelector('#pairing').value && document.querySelector('#copy-pairing').disabled",docsSession),'Docs should clear stale pairing when the service is unavailable');
+    await cdp.call('Network.emulateNetworkConditions',{offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1},docsSession);
+    await until(()=>cdp.evaluate("!!document.querySelector('#pairing').value && !document.querySelector('#copy-pairing').disabled",docsSession),'Docs should recover without reloading');
     if(process.env.CAPTURE_DIR){
         await mkdir(process.env.CAPTURE_DIR,{recursive:true});
         await cdp.call('Page.enable',{},session);
@@ -108,7 +128,6 @@ try {
         const screenshot=await cdp.call('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip:{x:0,y:0,width:metrics.cssContentSize.width,height:metrics.cssContentSize.height,scale:1}},session);
         await writeFile(join(process.env.CAPTURE_DIR,'settings.png'),Buffer.from(screenshot.data,'base64'));
     }
-    const pairing=`ws://127.0.0.1:${port}/extension#${credentials.relay_key}`;
     const printed=await promisify(execFile)(join(root,'target/debug/ocweb-mcp'),['--print-pairing','--port',port,'--state-dir',join(temp,'state')]);
     assert(printed.stdout.trim()===pairing,'print-pairing must work against a running server');
     assert.equal(await cdp.evaluate("typeof chrome.runtime.connectNative",session),'undefined','independent extension must not use a native host');
@@ -118,6 +137,9 @@ try {
     assert.equal(await cdp.evaluate("document.querySelector('#pairingString').value",session),'','pairing field should clear after success');
     await until(()=>cdp.evaluate("document.querySelector('#connectionStatus').textContent === 'Connected'",session),'Settings should show connected without reopening');
     await until(async()=>(await (await fetch(base+'/health')).json()).browser_connected,'Extension did not authenticate');
+    await until(()=>cdp.evaluate("document.querySelector('#status').textContent === '浏览器已连接'",docsSession),'Docs should update after the extension connects');
+    await cdp.call('Target.closeTarget',{targetId:docsTarget});
+    console.log('PASS dynamic docs pairing, connection status and service recovery');
     console.log('PASS actual extension Browser Relay Authentication v2 handshake');
 
     const opened=await api({action:'open',url:fixtureUrl});

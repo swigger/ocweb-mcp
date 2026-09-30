@@ -38,7 +38,24 @@ pub fn router(browser: Browser, port: u16) -> Router {
         .route("/health", get(health))
         .route(
             "/docs",
-            get(|| async { Html(include_str!("../static/docs.html")) }),
+            get(|| async {
+                (
+                    [("cache-control", "no-store"), ("x-frame-options", "DENY")],
+                    Html(include_str!("../static/docs.html")),
+                )
+            }),
+        )
+        .route(
+            "/setup",
+            get(move |State(browser): State<Browser>| async move {
+                (
+                    [("cache-control", "no-store")],
+                    Json(json!({
+                        "pairing": browser.relay.credentials.pairing(port),
+                        "browser_connected": *browser.relay.connected.borrow(),
+                    })),
+                )
+            }),
         )
         .route("/openapi.json", get(openapi))
         .route("/extension", get(extension))

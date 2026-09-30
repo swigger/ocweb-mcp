@@ -58,8 +58,8 @@ async fn main() -> Result<()> {
     let port = listener.local_addr()?.port();
     let extension = args
         .extension_dir
-        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../chrome-extension"));
-    let extension = extension.canonicalize().unwrap_or(extension);
+        .map(|path| path.canonicalize().unwrap_or(path).display().to_string())
+        .unwrap_or_else(|| "下载的 Chrome 扩展包解压后包含 manifest.json 的目录".to_owned());
     if args.show_credentials {
         eprintln!(
             "配对字符串（仅粘贴到扩展设置）: {}\nAPI/MCP Bearer token: {}",
@@ -93,8 +93,7 @@ async fn main() -> Result<()> {
             .is_err()
         {
             eprintln!(
-                "\n尚未连接浏览器，服务会继续等待。请按以下步骤操作：\n1. 打开 Chrome 的 chrome://extensions，开启开发者模式。\n2. 点击“加载已解压的扩展程序”，选择 {}\n3. 打开扩展 Settings，在 Connect to OCWeb 中粘贴配对字符串。\n   格式：ws://127.0.0.1:{port}/extension#<credentials.json 中的 relay_key>\n   运行 ocweb-mcp --print-pairing，或在工程目录执行 cargo run -- --print-pairing。无需停止服务。\n4. 选择 Selected tabs 并把测试标签页加入 OpenClaw 标签组，或选择 All tabs。\n连接成功后终端会打印 MCP 接入地址。文档: http://127.0.0.1:{port}/docs\n",
-                extension.display()
+                "\n尚未连接浏览器，服务会继续等待。请按以下步骤操作：\n1. 打开 Chrome 的 chrome://extensions，开启开发者模式。\n2. 点击“加载已解压的扩展程序”，选择 {extension}\n3. 打开 http://127.0.0.1:{port}/docs，复制页面中的完整连接串。\n   打开扩展 Settings，在 Connect to OCWeb 中粘贴连接串，点击 Connect。\n4. 选择 Selected tabs 并把页面加入 OpenClaw 标签组，或选择 All tabs。\n连接成功后终端会打印 MCP 接入地址。文档页面会自动更新连接状态。\n"
             );
         }
     });
