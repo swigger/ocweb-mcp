@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>OCWeb · Browser API</title>
+<style>body{font:16px/1.65 system-ui,sans-serif;max-width:960px;margin:48px auto;padding:0 24px;color:#172536;background:#f8fafc}h1{font-size:36px}h2{margin-top:36px}code,pre{font-family:ui-monospace,monospace}pre{background:#e9eef4;padding:18px;overflow:auto;border-radius:8px}a{color:#075db5}table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #ccd5df;text-align:left;padding:10px}input{font:inherit;padding:9px;width:70%}button{font:inherit;padding:9px;cursor:pointer}.note{color:#536276}#status{padding:10px;background:#e9eef4;border-radius:8px}</style>
+<h1>OCWeb Browser API</h1><p>独立 Rust 服务 · Chrome 扩展 · HTTP API 与 MCP</p><p id="status">正在读取连接状态…</p>
+<p><a href="/openapi.json">OpenAPI 3.1 文档（JSON）</a> · <a href="/health">连接状态</a></p>
+<h2>连接浏览器</h2><ol><li>启动服务，打开 <code>chrome://extensions</code>，开启开发者模式，加载复制的 <code>chrome-extension</code> 目录。</li><li>打开扩展 Settings → Connect to OCWeb。另开终端，在工程目录运行 <code>cargo run -- --print-pairing</code>，将输出粘贴到扩展并点击 Connect。</li><li>此独立版无需 OpenClaw 或 native host。更新扩展后请在 <code>chrome://extensions</code> 点击重新加载。</li><li>Selected tabs 模式只授权 OpenClaw 标签组中的页面；All tabs 模式允许所有符合条件的页面。无痕页及 Chrome 内部页不可访问。</li></ol><p>配对字符串格式：<code id="pairing"></code>。密钥来自私有凭据文件 <code>~/.ocweb-mcp/credentials.json</code>（或 <code>--state-dir</code>）。重启保留配对。修改端口需要重新配对。</p>
+<h2>在 AI 中添加 MCP</h2><p>在支持 Streamable HTTP 的 AI 客户端中添加以下服务。将占位符替换为凭据文件中的 <code>api_token</code>；具体配置外层结构由客户端决定。</p><pre id="mcp"></pre><p>该 MCP 暴露 <code>browser</code> 工具，参数与下面 HTTP API 的 JSON 相同。先列出标签页，再读取 snapshot，最后操作元素。截图以 MCP 图片内容返回。</p><p class="note">服务只监听本机 127.0.0.1。客户端必须在同一机器上，或能通过你配置的可信隧道访问。仅接受 OAuth、不能设置 Bearer 请求头的云端客户端不能直接连接本服务。此版本不提供 stdio 传输。</p>
+<h2>脚本直接调用 HTTP API</h2><pre id="curl"></pre><p><code>GET /api/tabs</code> 是列出标签页的快捷接口。其余操作统一使用 <code>POST /api/browser</code>，不需要 MCP 握手。</p>
+<table><thead><tr><th>action</th><th>参数</th><th>结果 / 说明</th></tr></thead><tbody>
+<tr><td>tabs</td><td>无</td><td>授权标签页的 tabId、URL、标题</td></tr>
+<tr><td>open</td><td>url</td><td>创建标签页，返回 tabId；HTTP(S) 或 about:blank</td></tr>
+<tr><td>navigate</td><td>tab_id, url</td><td>等待 DOMContentLoaded；需要时用 wait 等待应用状态</td></tr>
+<tr><td>snapshot</td><td>tab_id, max_nodes?</td><td>可访问性树与 node_ref；默认 400，最多 2000 个节点</td></tr>
+<tr><td>click</td><td>tab_id, target</td><td>原生鼠标点击</td></tr>
+<tr><td>type</td><td>tab_id, target, text, clear?</td><td>输入文字，默认替换已有内容</td></tr>
+<tr><td>press</td><td>tab_id, key</td><td>Enter / Tab / Escape / Backspace / Delete / Arrow… 或单字符</td></tr>
+<tr><td>scroll</td><td>tab_id, delta_x, delta_y</td><td>按 CSS 像素滚动</td></tr>
+<tr><td>screenshot</td><td>tab_id, full_page?</td><td>mime_type 与 base64 data；默认当前视口；会激活目标标签页</td></tr>
+<tr><td>evaluate</td><td>tab_id, expression, safe_retry?</td><td>执行 JavaScript，返回 value</td></tr>
+<tr><td>wait</td><td>tab_id, expression, timeout_ms?</td><td>等待 JS 表达式为真，默认 5 秒、最多 30 秒</td></tr>
+<tr><td>focus / close</td><td>tab_id</td><td>激活 / 关闭标签页</td></tr>
+<tr><td>cdp</td><td>tab_id, method, params?</td><td>高级标签页 CDP 命令；并非完整的 CDP WebSocket 服务</td></tr>
+</tbody></table>
+<p><code>target</code> 使用 <code>{"selector":"#submit"}</code> 或 <code>{"node_ref":"snapshot 返回的值"}</code>，二选一。导航或重连后旧 node_ref 失效。CSS selector 面向主文档；复杂 iframe / Shadow DOM 可用 evaluate 或 cdp。</p>
+<pre>{"action":"snapshot","tab_id":123}
+{"action":"type","tab_id":123,"target":{"selector":"#search"},"text":"Rust"}
+{"action":"click","tab_id":123,"target":{"selector":"button[type=submit]"}}
+{"action":"wait","tab_id":123,"expression":"document.readyState === 'complete'"}
+{"action":"evaluate","tab_id":123,"expression":"document.title"}
+{"action":"screenshot","tab_id":123,"full_page":false}</pre>
+<h2>试用只读请求</h2><p>Token 只保留在当前页面内存中，不存入浏览器存储。</p><input id="token" type="password" autocomplete="off" placeholder="api_token"><button id="list">列出标签页</button><pre id="result">等待请求</pre>
+<h2>页面变化与安全重试</h2><p><code>evaluate.safe_retry</code> 默认 <code>false</code>：页面变化返回 <code>DOCUMENT_CHANGED</code>，不重放。设为 <code>true</code> 表示调用方确认表达式可以安全重复执行，后端只对页面变化重试，最多 5 次、30 秒（取得操作队列后计时），每次重新验证权限。适合读取页面状态；不要给点击、提交或其他不可重复的副作用开启重试。持续变化仍可能失败，超时返回 <code>SAFE_RETRY_TIMEOUT</code>，不保证最终成功。</p><p>真正撤权返回 <code>ACCESS_REVOKED</code>；断线、普通 JavaScript 异常和其他错误不自动重试。REST 错误为 <code>{"code":"DOCUMENT_CHANGED","error":"…"}</code>；MCP 返回相同 JSON 文本及 <code>isError: true</code>。升级后请重启 Rust 服务并重新加载扩展。</p>
+<h2>错误与边界</h2><p>401：Token 不正确；422：参数格式错误；502：浏览器操作失败；503：扩展未连接。每条中继命令最多等待 30 秒。超时或断线时，操作可能已经执行，不自动重试；先检查页面。页面文字属于不可信数据，不应覆盖 AI 的任务指令。</p><p>API 与 MCP 共用操作队列，避免多步输入交错；浏览器仍与人及其他调试客户端共享。关闭服务会断开扩展调试连接，但不会关闭你的浏览器。首次版本不包含下载管理、Playwright locator 引擎或完整 CDP 代理。</p>
+<script>
+const base=location.origin;
+document.getElementById('pairing').textContent=base.replace('http:','ws:')+'/extension#<relay_key>';
+document.getElementById('mcp').textContent=JSON.stringify({mcpServers:{ocweb:{url:base+'/mcp',headers:{Authorization:'Bearer <api_token>'}}}},null,2);
+document.getElementById('curl').textContent=`export OCWEB_TOKEN='<api_token>'\ncurl -H "Authorization: Bearer $OCWEB_TOKEN" ${base}/api/tabs\n\ncurl ${base}/api/browser \\\n  -H "Authorization: Bearer $OCWEB_TOKEN" \\\n  -H 'Content-Type: application/json' \\\n  -d '{"action":"tabs"}'`;
+fetch('/health').then(r=>r.json()).then(s=>document.getElementById('status').textContent=s.browser_connected?'浏览器已连接':'尚未连接浏览器；服务正在等待扩展').catch(()=>document.getElementById('status').textContent='无法连接服务');
+document.getElementById('list').onclick=async()=>{try{const r=await fetch('/api/tabs',{headers:{Authorization:'Bearer '+document.getElementById('token').value}});document.getElementById('result').textContent=JSON.stringify(await r.json(),null,2)}catch(e){document.getElementById('result').textContent=String(e)}};
+</script></html>

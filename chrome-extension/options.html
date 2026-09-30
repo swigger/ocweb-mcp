@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OCWeb Browser Settings</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font:
+          14px/1.45 system-ui,
+          sans-serif;
+      }
+      body {
+        max-width: 620px;
+        margin: 36px auto;
+        padding: 0 20px 48px;
+        color: #f3f5f7;
+        background: #15171b;
+      }
+      h1 {
+        font-size: 23px;
+        margin-bottom: 6px;
+      }
+      h2 {
+        font-size: 15px;
+        margin: 0 0 10px;
+      }
+      section {
+        margin-top: 18px;
+        padding: 16px;
+        border: 1px solid #343941;
+        border-radius: 12px;
+        background: #202329;
+      }
+      label {
+        display: block;
+        margin: 9px 0;
+      }
+      select,
+      textarea,
+      button {
+        font: inherit;
+      }
+      select,
+      textarea {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid #454b55;
+        border-radius: 8px;
+        padding: 9px;
+        background: #17191d;
+        color: inherit;
+      }
+      textarea {
+        min-height: 92px;
+        resize: vertical;
+      }
+      button {
+        margin: 9px 7px 0 0;
+        padding: 8px 12px;
+        border: 0;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      .primary {
+        background: #ff5a36;
+        color: white;
+        font-weight: 600;
+      }
+      .danger {
+        background: #633128;
+        color: white;
+      }
+      .muted {
+        color: #aeb5c0;
+      }
+      .status {
+        margin: 8px 0 0;
+      }
+      .hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>OCWeb Browser Settings</h1>
+    <p class="muted">
+      The extension only relays browser automation. Connect it to the standalone Rust service. No OpenClaw installation is required.
+    </p>
+
+    <section id="retiredCustody" class="hidden">
+      <h2>Automation paused</h2>
+      <p>Automation is paused to protect a pre-upgrade copilot session.</p>
+      <p class="muted">
+        Confirm old runs are finished, then use
+        <strong>Disconnect</strong> to discard retired recovery state, then pair again below.
+      </p>
+    </section>
+
+    <section>
+      <h2>Connection</h2>
+      <p id="connectionStatus" class="status">Checking…</p>
+    </section>
+
+    <section>
+      <h2>Access</h2>
+      <label for="accessMode">Browser access mode</label>
+      <select id="accessMode">
+        <option value="all">All tabs</option>
+        <option value="selected">Selected tabs</option>
+      </select>
+    </section>
+
+    <section>
+      <h2>Connect to OCWeb</h2>
+      <p class="muted">
+        Run <code>cargo run -- --print-pairing</code> in the <code>ocweb-mcp</code> project directory.
+        Paste the output below and click Connect. You can run this command while the service is running.
+        Pair once; future connections are automatic while the Rust service runs.
+      </p>
+      <textarea
+        id="pairingString"
+        spellcheck="false"
+        placeholder="Paste the pairing string"
+      ></textarea>
+      <button id="pair" type="button">Connect</button>
+    </section>
+
+    <section>
+      <h2>Diagnostics</h2>
+      <p class="muted">
+        Start the Rust service with <code>cargo run</code>.
+        Default API documentation: <a href="http://127.0.0.1:18799/docs" target="_blank" rel="noopener">http://127.0.0.1:18799/docs</a>.
+        If you use a different port, include it in the pairing command: <code>--port 18800</code>.
+      </p>
+      <button id="disconnect" class="danger" type="button">
+        Disconnect
+      </button>
+    </section>
+    <p id="message" class="status"></p>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>
